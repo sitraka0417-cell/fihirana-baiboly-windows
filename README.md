@@ -61,3 +61,9 @@ Dans Réglages, choisissez un fichier MP4, M4V, MOV ou AVI comme fond. La vidéo
 
 ### Recadrage des fonds vidéo
 Les mêmes curseurs de zoom, déplacement horizontal et vertical sont également appliqués au MediaView pour les fonds vidéo. La prévisualisation de recadrage en direct n'est pas encore disponible dans l'écran Réglages.
+
+## Dépannage
+- **"Failed to launch JVM"** au démarrage de l'installateur : corrigé en ajoutant les modules JDK nécessaires
+  (`java.sql`, `java.naming`, `java.logging`, …) au runtime embarqué (`modules(...)` dans `app/build.gradle.kts`).
+  Si une erreur survient quand même, consultez `%USERPROFILE%\.fihirana-baiboly\error.log`.
+- Raccourcis projection : ← / → (andininy), R (refrain), F11 ou F (plein écran), Échap (fermer).

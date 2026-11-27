@@ -18,6 +18,8 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.*
 import androidx.compose.ui.window.*
 import androidx.compose.ui.awt.SwingPanel
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import java.awt.Graphics
 import java.awt.Graphics2D
 import java.awt.Image
@@ -61,8 +63,33 @@ data class Projection(
     val safeSlides get() = slides.ifEmpty { listOf(ProjectionSlide("")) }
 }
 
-fun main() = application {
-    Database.open()
+private fun logStartupError(t: Throwable) {
+    try {
+        val dir = File(System.getProperty("user.home"), ".fihirana-baiboly").apply { mkdirs() }
+        File(dir, "error.log").appendText("${java.time.LocalDateTime.now()}\n${t.stackTraceToString()}\n\n")
+    } catch (_: Throwable) {}
+    try {
+        javax.swing.JOptionPane.showMessageDialog(
+            null,
+            "Tsy afaka nanomboka ny rindrambaiko:\n${t::class.simpleName}: ${t.message}\n\nLog: %USERPROFILE%\\.fihirana-baiboly\\error.log",
+            "Baiboly sy Fihirana Advantista", javax.swing.JOptionPane.ERROR_MESSAGE
+        )
+    } catch (_: Throwable) {}
+}
+
+fun main() {
+    try {
+        Database.open()
+    } catch (t: Throwable) {
+        logStartupError(t)
+        return
+    }
+    Thread.setDefaultUncaughtExceptionHandler { _, e -> logStartupError(e) }
+    application { App() }
+}
+
+@Composable
+private fun ApplicationScope.App() {
     var projection by remember {
         mutableStateOf(Projection("Projection prête", "Baiboly sy Fihirana Advantista",
             listOf(ProjectionSlide("Safidio ny hira na andininy.")), 36, Database.setting("background")))
@@ -118,16 +145,28 @@ fun main() = application {
     if (projectionOpen) {
         val screens = java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().screenDevices
         val second = screens.getOrNull(1)?.defaultConfiguration?.bounds
-        Window(
-            onCloseRequest = { projectionOpen = false },
-            title = "Projection — Baiboly sy Fihirana",
-            state = WindowState(
+        // remember: sinon la fenêtre revient à sa taille/position initiale à chaque changement de projection
+        val projectionState = remember {
+            WindowState(
                 width = if (second != null) (second.width / 1.5).dp else 1100.dp,
                 height = if (second != null) (second.height / 1.5).dp else 700.dp,
                 position = if (second != null) WindowPosition(second.x.dp, second.y.dp) else WindowPosition(Alignment.Center)
             )
+        }
+        Window(
+            onCloseRequest = { projectionOpen = false },
+            title = "Projection — Baiboly sy Fihirana",
+            state = projectionState
         ) {
-            ProjectionWindow(projection)
+            ProjectionWindow(
+                projection,
+                onToggleFullscreen = {
+                    projectionState.placement =
+                        if (projectionState.placement == WindowPlacement.Fullscreen) WindowPlacement.Floating
+                        else WindowPlacement.Fullscreen
+                },
+                onClose = { projectionOpen = false }
+            )
         }
     }
 }
@@ -213,6 +252,8 @@ private fun HymnScreen(update: (Projection) -> Unit, open: () -> Unit, active: B
     var author by remember { mutableStateOf("") }
     var lyricText by remember { mutableStateOf("") }
     var status by remember { mutableStateOf("") }
+    var listVersion by remember { mutableIntStateOf(0) }
+    val songList = remember(lang, term, listVersion) { Database.songs(lang, term) }
 
     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Column(Modifier.width(320.dp).fillMaxHeight()) {
@@ -225,7 +266,7 @@ private fun HymnScreen(update: (Projection) -> Unit, open: () -> Unit, active: B
             OutlinedTextField(term, { term = it }, Modifier.fillMaxWidth(),
                 label = { Text("Laharana / lohateny") }, singleLine = true)
             LazyColumn(Modifier.weight(1f)) {
-                items(Database.songs(lang, term), key = { it.number }) { song ->
+                items(songList, key = { it.number }) { song ->
                     Column(Modifier.fillMaxWidth().clickable {
                         selected = song
                         parts = Database.songParts(lang, song.number)
@@ -277,6 +318,7 @@ private fun HymnScreen(update: (Projection) -> Unit, open: () -> Unit, active: B
                                 listOf(lang, selected!!.number, index + 1, if (refrain) "r" else "v", clean))
                         }
                         parts = Database.songParts(lang, selected!!.number)
+                        listVersion++
                         status = "Voatahiry ny fanitsiana."
                         edit = false
                     }) { Text("Tehirizo ny fanitsiana") }
@@ -694,7 +736,9 @@ private fun SettingsScreen(projection: Projection, update: (Projection) -> Unit)
 }
 
 @Composable
-private fun ProjectionWindow(projection: Projection) {
+private fun ProjectionWindow(projection: Projection, onToggleFullscreen: () -> Unit = {}, onClose: () -> Unit = {}) {
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { focusRequester.requestFocus() } }
     var index by remember(projection.title, projection.slides) { mutableIntStateOf(0) }
     var showingRefrain by remember { mutableStateOf(false) }
     val slides = projection.safeSlides
@@ -702,9 +746,23 @@ private fun ProjectionWindow(projection: Projection) {
 
     Box(
         Modifier.fillMaxSize()
+            .focusRequester(focusRequester)
+            .focusable()
             .onPreviewKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 when (event.key) {
+                    Key.F11, Key.F -> { onToggleFullscreen(); true }
+                    Key.Escape -> { onClose(); true }
+                    Key.DirectionDown, Key.PageDown, Key.Spacebar -> {
+                        showingRefrain = false
+                        index = nextVerseIndex(slides, index, 1)
+                        true
+                    }
+                    Key.DirectionUp, Key.PageUp -> {
+                        showingRefrain = false
+                        index = nextVerseIndex(slides, index, -1)
+                        true
+                    }
                     Key.DirectionRight -> {
                         showingRefrain = false
                         index = nextVerseIndex(slides, index, 1)
@@ -742,7 +800,7 @@ private fun ProjectionWindow(projection: Projection) {
             RichProjectionText(displayed, fontSize = projection.font.sp, lineHeight = (projection.font + 12).sp)
         }
         Text(
-            "← / → : andininy     R : refrain",
+            "← / → : andininy     R : refrain     F11 : plein écran     Échap : akatona",
             Modifier.align(Alignment.BottomCenter).padding(12.dp),
             color = Color(0xFF777777), fontSize = 11.sp
         )
@@ -836,7 +894,7 @@ private fun VideoProjectionBackground(path: String, zoom: Float, cropX: Float, c
         SwingPanel(
             modifier = Modifier.fillMaxSize(),
             factory = {
-                JavaFxRuntime.ensureStarted()
+                try { JavaFxRuntime.ensureStarted() } catch (t: Throwable) { logStartupError(t) }
                 val panel = JFXPanel()
                 panel.background = java.awt.Color.BLACK
                 Platform.runLater {

@@ -90,16 +90,17 @@ object Database {
             "SELECT lang,num,title,author,key,theme,sub FROM hymns WHERE lang=? AND (title LIKE ? OR CAST(num AS TEXT) LIKE ?) ORDER BY num LIMIT 300"
         }
         val args = if (term.isBlank()) listOf(lang) else listOf(lang, "%$term%", "%$term%")
+        val edits = HashMap<Int, Pair<String?, String?>>()
+        user.prepareStatement("SELECT num,title,author FROM song_edits WHERE lang=?").use { p ->
+            p.setString(1, lang)
+            p.executeQuery().use { e -> while (e.next()) edits[e.getInt(1)] = e.getString(2) to e.getString(3) }
+        }
         return query(sql, args) { r ->
             val original = Song(r.getString(1), r.getInt(2), r.getString(3), r.getString(4) ?: "",
                 r.getString(5) ?: "", r.getInt(6), r.getInt(7))
-            user.prepareStatement("SELECT title,author FROM song_edits WHERE lang=? AND num=?").use { p ->
-                p.setString(1, original.lang); p.setInt(2, original.number)
-                p.executeQuery().use { e ->
-                    if (e.next()) original.copy(title=e.getString(1) ?: original.title, author=e.getString(2) ?: original.author)
-                    else original
-                }
-            }
+            val e = edits[original.number]
+            if (e != null) original.copy(title = e.first ?: original.title, author = e.second ?: original.author)
+            else original
         }
     }
 

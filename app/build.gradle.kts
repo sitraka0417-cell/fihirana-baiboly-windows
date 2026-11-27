@@ -35,6 +35,14 @@ compose.desktop {
                 org.jetbrains.compose.desktop.application.dsl.TargetFormat.Exe,
                 org.jetbrains.compose.desktop.application.dsl.TargetFormat.Msi
             )
+            // FIX "Failed to launch JVM": jpackage/jlink ne garde par défaut que quelques modules JDK
+            // (java.base, java.desktop, jdk.unsupported...). sqlite-jdbc a besoin de java.sql, java.logging,
+            // java.naming, etc. Sans eux, le .exe installé s'arrête aussitôt avec "Failed to launch JVM".
+            modules(
+                "java.sql", "java.naming", "java.logging", "java.management", "java.prefs",
+                "java.xml", "java.net.http", "jdk.unsupported", "jdk.jsobject", "jdk.xml.dom"
+            )
+            jvmArgs += listOf("-Xmx1g", "-Dfile.encoding=UTF-8")
             packageName = "BaibolySyFihiranaAdvantista"
             packageVersion = "1.0.0"
             description = "Baiboly sy Fihirana Advantista"

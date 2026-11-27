@@ -17,6 +17,19 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.10.2'
+      - name: Smoke test (l'app doit démarrer, sinon "Failed to launch JVM")
+        shell: pwsh
+        run: |
+          gradle :app:createReleaseDistributable
+          $exe = Get-ChildItem app/build/compose/binaries/main-release/app -Recurse -Filter BaibolySyFihiranaAdvantista.exe | Select-Object -First 1
+          $p = Start-Process $exe.FullName -PassThru
+          Start-Sleep -Seconds 20
+          if ($p.HasExited) {
+            Write-Error "L'application s'est arrêtée (code $($p.ExitCode))"
+            if (Test-Path "$env:USERPROFILE\.fihirana-baiboly\error.log") { Get-Content "$env:USERPROFILE\.fihirana-baiboly\error.log" }
+            exit 1
+          }
+          Stop-Process -Id $p.Id -Force
       - name: Build MSI
         run: gradle :app:packageReleaseMsi
       - name: Build EXE
