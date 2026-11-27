@@ -1,3 +1,6 @@
+import java.io.InputStream
+import java.net.URL
+
 plugins {
     kotlin("jvm")
     id("org.jetbrains.compose")
@@ -48,10 +51,10 @@ val downloadContentDb by tasks.registering {
         val target = output.asFile
         target.parentFile.mkdirs()
         if (!target.exists() || target.length() < 10_000_000L) {
-            val url = java.net.URL(
+            val url = URL(
                 "https://raw.githubusercontent.com/sitraka0417-cell/fihirana/main/app/src/main/assets/fihirana_baiboly.db"
             )
-            url.openStream().use { input ->
+            url.openStream().use { input: InputStream ->
                 target.outputStream().use { outputStream -> input.copyTo(outputStream) }
             }
         }
