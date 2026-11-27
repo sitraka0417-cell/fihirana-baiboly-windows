@@ -1,0 +1,6 @@
+.gradle/
+build/
+**/build/
+.idea/
+*.iml
+app/src/main/resources/fihirana_baiboly.db

@@ -1,0 +1,28 @@
+name: Build Windows installers
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+      - name: Build MSI
+        run: gradle :app:packageReleaseMsi
+      - name: Build EXE
+        run: gradle :app:packageReleaseExe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Baiboly-Sy-Fihirana-Advantista-Windows
+          path: app/build/compose/binaries/main-release/**/*.*
+          if-no-files-found: error
