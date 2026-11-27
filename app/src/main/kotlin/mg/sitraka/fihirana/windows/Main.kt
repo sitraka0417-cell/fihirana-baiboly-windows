@@ -601,6 +601,7 @@ private fun TemporaryScreen(update: (Projection) -> Unit, open: () -> Unit) {
     }
 }
 
+@Composable
 private fun HistoryScreen(update: (Projection) -> Unit, open: () -> Unit) {
     val rows = remember {
         Database.user.prepareStatement("SELECT title,body FROM history ORDER BY id DESC LIMIT 200").use { p ->
@@ -861,7 +862,7 @@ private fun VideoProjectionBackground(path: String, zoom: Float, cropX: Float, c
                         view.translateX = (1280.0 - view.fitWidth) * cropX.coerceIn(-1f, 1f) / 2.0
                         view.translateY = (720.0 - view.fitHeight) * cropY.coerceIn(-1f, 1f) / 2.0
                         panel.scene = Scene(root, FxColor.BLACK)
-                        player.isCycleCount = MediaPlayer.INDEFINITE
+                        player.cycleCount = MediaPlayer.INDEFINITE
                         player.setOnReady { player.play() }
                         player.setOnError { player.dispose() }
                     } catch (_: Exception) {
