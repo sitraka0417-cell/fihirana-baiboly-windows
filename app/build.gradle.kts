@@ -26,6 +26,9 @@ dependencies {
 
 compose.desktop {
     application {
+        buildTypes.release.proguard {
+            isEnabled.set(false)
+        }
         mainClass = "mg.sitraka.fihirana.windows.MainKt"
         nativeDistributions {
             targetFormats(
