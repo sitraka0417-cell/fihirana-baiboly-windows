@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "mg.sitraka.fihirana"
-version = "1.0.0"
+version = "1.1.0"
 
 kotlin { jvmToolchain(17) }
 
@@ -44,7 +44,7 @@ compose.desktop {
             )
             jvmArgs += listOf("-Xmx1g", "-Dfile.encoding=UTF-8")
             packageName = "BaibolySyFihiranaAdvantista"
-            packageVersion = "1.0.0"
+            packageVersion = "1.1.0"
             description = "Baiboly sy Fihirana Advantista"
             vendor = "Sitraka Nambinintsoa"
             windows {

@@ -67,3 +67,12 @@ Les mêmes curseurs de zoom, déplacement horizontal et vertical sont également
   (`java.sql`, `java.naming`, `java.logging`, …) au runtime embarqué (`modules(...)` dans `app/build.gradle.kts`).
   Si une erreur survient quand même, consultez `%USERPROFILE%\.fihirana-baiboly\error.log`.
 - Raccourcis projection : ← / → (andininy), R (refrain), F11 ou F (plein écran), Échap (fermer).
+
+## Version 1.1.0 — refonte projection et design
+- **Vraie projection** : détection automatique du 2ᵉ écran (projecteur/TV), fenêtre plein écran sans bordure. Choix manuel dans Réglages → Écran de projection. Un seul écran : fenêtre flottante (F11 = plein écran).
+- **Fihirana** : cliquer sur un couplet/refrain l'affiche immédiatement ; ←/→ suit l'ordre exact (1, refrain, 2, 3…) ; `R` saute au refrain et, pressé à nouveau, passe au couplet suivant (répétable) ; option « refrain après chaque couplet ».
+- **Baiboly** : recherche de livre à la frappe (« Sa » → Salamo, Samoela…), ↑/↓ + Entrée, puis grilles Toko / Andininy ; saisie rapide « Sal 139:1-10 » ; un verset par écran, ←/→ pour avancer ; bouton Projeter / Akatona.
+- **Fonds séparés** Fihirana / Baiboly : presets, import image/GIF animé/vidéo (copiés dans `%USERPROFILE%\.fihirana-baiboly\backgrounds`), zoom, position, assombrissement.
+- **Ctrl + ↑/↓** (ou Ctrl + ←/→) : taille du texte pendant la projection ; le texte se réduit aussi automatiquement s'il déborde.
+- Nouveau design sombre/or, rendu identique entre l'aperçu et l'écran de projection.
+- Fond vidéo : affiché sur le 2ᵉ écran uniquement (fenêtre JavaFX sous une fenêtre de texte transparente).
