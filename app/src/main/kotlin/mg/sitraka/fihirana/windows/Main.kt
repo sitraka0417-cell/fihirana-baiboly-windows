@@ -240,6 +240,11 @@ private fun PreviewPanel(ctrl: ProjectionController) {
             GhostButton("A−", { ctrl.resizeFont(-2) }, enabled = hasSlides)
             GhostButton("A+", { ctrl.resizeFont(2) }, enabled = hasSlides)
         }
+        Spacer(Modifier.height(8.dp))
+        GhostButton(
+            if (ctrl.blank) "◼ Asehoy indray ny soratra (B)" else "◻ Afenina ny soratra — fond ihany (B)",
+            { ctrl.blank = !ctrl.blank }, Modifier.fillMaxWidth(), enabled = hasSlides
+        )
         Spacer(Modifier.height(14.dp))
         GoldButton(
             if (ctrl.live) "■  Akatona ny projection" else "▶  Alefaso ny projection",
@@ -255,6 +260,7 @@ private fun PreviewPanel(ctrl: ProjectionController) {
             Spacer(Modifier.height(6.dp))
             Text("← →  pejy teo aloha / manaraka", color = Ui.Text, fontSize = 12.sp)
             Text("R  refrain (indray = andininy manaraka)", color = Ui.Text, fontSize = 12.sp)
+            Text("B  afenina ny soratra (fond ihany)", color = Ui.Text, fontSize = 12.sp)
             Text("Ctrl + ↑ ↓  haben'ny soratra", color = Ui.Text, fontSize = 12.sp)
             Text("Échap  hampitsahatra", color = Ui.Text, fontSize = 12.sp)
         }

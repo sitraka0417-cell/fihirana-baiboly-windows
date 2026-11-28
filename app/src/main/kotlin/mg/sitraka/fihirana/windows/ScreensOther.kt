@@ -334,6 +334,7 @@ fun SettingsScreen(ctrl: ProjectionController) {
             listOf(
                 "← → (na ↑ ↓, PageUp / PageDown)" to "Pejy teo aloha / manaraka",
                 "R" to "Mankany amin'ny refrain · tsindrio indray = andininy manaraka",
+                "B  (na .)" to "Afenina ny soratra, mijanona ny fond · tsindrio indray hanehoana",
                 "Home / End" to "Pejy voalohany / farany",
                 "Ctrl + ↑ ↓  (na Ctrl + ← →)" to "Hanalehibe / hampiay ny soratra",
                 "Échap" to "Hampitsahatra ny projection",

@@ -59,7 +59,7 @@ fun SlideCard(
 }
 
 @Composable
-private fun SongRow(song: Song, selected: Boolean, onClick: () -> Unit) {
+private fun SongRow(song: Song, selected: Boolean, fav: Boolean, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(12.dp),
@@ -78,7 +78,7 @@ private fun SongRow(song: Song, selected: Boolean, onClick: () -> Unit) {
                 )
             }
             Spacer(Modifier.width(12.dp))
-            Column {
+            Column(Modifier.weight(1f)) {
                 Text(
                     song.title, color = Ui.Text, fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
                     maxLines = 1, overflow = TextOverflow.Ellipsis
@@ -87,32 +87,67 @@ private fun SongRow(song: Song, selected: Boolean, onClick: () -> Unit) {
                     Text(song.author, color = Ui.Muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
+            if (fav) Text("★", color = Ui.Gold, fontSize = 14.sp)
         }
     }
 }
 
 // ───────────────────────────── Fihirana ─────────────────────────────
 
+/**
+ * Construit les diapositives d'un chant.
+ *
+ * Refrain d'un couplet (par priorité) :
+ *  1. refrain à portée explicite : « [REFRAIN 4] » ou « [REFRAIN 1-3] »
+ *  2. refrain placé juste après le couplet
+ *  3. dernier refrain sans portée placé avant le couplet
+ *  4. premier refrain sans portée du chant
+ * Sans « refrain après chaque couplet », les parties sont simplement affichées dans l'ordre.
+ */
+private val RepeatMark = Regex(":[;,]:\\s*(.*?)\\s*:[;,]:")
+
+/** « :;: texte :;: » (ou « :,: ») devient « ‖: texte :‖ » pour l'affichage. */
+fun tidyLyrics(text: String): String = RepeatMark.replace(text) { "‖: ${it.groupValues[1]} :‖" }
+
 fun buildHymnSlides(parts: List<SongPart>, repeatRefrain: Boolean): List<ProjectionSlide> {
+    var n = 0
+    val verseNo = parts.map { if (it.isRefrain) 0 else ++n }
+    fun refrainLabel(p: SongPart) = if (p.scopeText.isNotBlank()) "Refrain (${p.scopeText})" else "Refrain"
+
+    if (!repeatRefrain) {
+        return parts.mapIndexed { i, p ->
+            if (p.isRefrain) ProjectionSlide(tidyLyrics(p.text), true, label = refrainLabel(p), scope = p.scope)
+            else ProjectionSlide(tidyLyrics(p.text), false, label = "Andininy ${verseNo[i]}", verseNo = verseNo[i])
+        }
+    }
+
+    val refrains = parts.withIndex().filter { it.value.isRefrain }
+    fun refrainFor(i: Int, num: Int): SongPart? {
+        refrains.firstOrNull { it.value.scope?.contains(num) == true }?.let { return it.value }
+        val next = parts.getOrNull(i + 1)
+        if (next != null && next.isRefrain && next.scope == null) return next
+        refrains.lastOrNull { it.value.scope == null && it.index < i }?.let { return it.value }
+        return refrains.firstOrNull { it.value.scope == null }?.value
+    }
+
     val out = mutableListOf<ProjectionSlide>()
-    var verseNo = 0
-    var currentRefrain: SongPart? = null
     parts.forEachIndexed { i, p ->
-        if (p.isRefrain) {
-            currentRefrain = p
-            out.add(ProjectionSlide(p.text, true, label = "Refrain"))
-        } else {
-            verseNo++
-            out.add(ProjectionSlide(p.text, false, label = "Andininy $verseNo"))
-            val refrain = currentRefrain ?: parts.firstOrNull { it.isRefrain }
-            val next = parts.getOrNull(i + 1)
-            if (repeatRefrain && refrain != null && next?.isRefrain != true) {
-                out.add(ProjectionSlide(refrain.text, true, label = "Refrain"))
-            }
+        if (!p.isRefrain) {
+            out.add(ProjectionSlide(tidyLyrics(p.text), false, label = "Andininy ${verseNo[i]}", verseNo = verseNo[i]))
+            refrainFor(i, verseNo[i])?.let { out.add(ProjectionSlide(tidyLyrics(it.text), true, label = refrainLabel(it), scope = it.scope)) }
         }
     }
     return out
 }
+
+private fun lyricsFromParts(parts: List<SongPart>): String = parts.joinToString("\n\n") {
+    if (it.isRefrain) {
+        val sc = if (it.scopeText.isNotBlank()) " ${it.scopeText}" else ""
+        "[REFRAIN$sc]\n${it.text}"
+    } else it.text
+}
+
+private val RefrainHead = Regex("^\\[REFRAIN(?:\\s+([0-9,\\-–\\s]+?))?\\s*\\]\\s*", RegexOption.IGNORE_CASE)
 
 @Composable
 fun HymnScreen(ctrl: ProjectionController) {
@@ -121,7 +156,11 @@ fun HymnScreen(ctrl: ProjectionController) {
     var lang by remember { mutableStateOf(langs.firstOrNull()?.code ?: "mg") }
     var term by remember { mutableStateOf("") }
     var listVersion by remember { mutableIntStateOf(0) }
-    val songs = remember(lang, term, listVersion) { Database.songs(lang, term) }
+    val allSongs = remember(lang, term, listVersion) { Database.songs(lang, term) }
+    var favVersion by remember { mutableIntStateOf(0) }
+    var onlyFav by remember { mutableStateOf(false) }
+    val favs = remember(favVersion) { Database.favorites("hymn") }
+    val songs = if (onlyFav) allSongs.filter { "${it.lang}:${it.number}" in favs } else allSongs
     var selected by remember { mutableStateOf<Song?>(null) }
     var parts by remember { mutableStateOf<List<SongPart>>(emptyList()) }
     var repeatRefrain by remember { mutableStateOf(Database.setting("refrainEach", "0") == "1") }
@@ -163,7 +202,7 @@ fun HymnScreen(ctrl: ProjectionController) {
         parts = Database.songParts(s.lang, s.number)
         title = s.title
         author = s.author
-        lyricText = parts.joinToString("\n\n") { (if (it.isRefrain) "[REFRAIN]\n" else "") + it.text }
+        lyricText = lyricsFromParts(parts)
         edit = false
         status = ""
         stagedIndex = 0
@@ -193,6 +232,7 @@ fun HymnScreen(ctrl: ProjectionController) {
                 langs.forEach { l ->
                     Chip(l.short, lang == l.code, { lang = l.code; selected = null; parts = emptyList() })
                 }
+                Chip("★ Tiana", onlyFav, { onlyFav = !onlyFav })
             }
             Spacer(Modifier.height(10.dp))
             AppField(
@@ -208,7 +248,7 @@ fun HymnScreen(ctrl: ProjectionController) {
             Spacer(Modifier.height(8.dp))
             LazyColumn(Modifier.weight(1f)) {
                 items(songs, key = { it.number }) { s ->
-                    SongRow(s, selected?.number == s.number && selected?.lang == s.lang) { pick(s) }
+                    SongRow(s, selected?.number == s.number && selected?.lang == s.lang, "${s.lang}:${s.number}" in favs) { pick(s) }
                 }
             }
         }
@@ -229,6 +269,11 @@ fun HymnScreen(ctrl: ProjectionController) {
                             maxLines = 2, overflow = TextOverflow.Ellipsis)
                         if (song.author.isNotBlank()) Text(song.author, color = Ui.Muted, fontSize = 13.sp)
                     }
+                    val favKey = "${song.lang}:${song.number}"
+                    GhostButton(if (favKey in favs) "★" else "☆", {
+                        Database.toggleFavorite("hymn", favKey)
+                        favVersion++
+                    })
                     GhostButton(if (edit) "Ajanony" else "Hanitsy", { edit = !edit })
                     GoldButton(if (isLive) "■  Akatona" else "▶  Projeter", {
                         if (isLive) ctrl.stop()
@@ -246,10 +291,19 @@ fun HymnScreen(ctrl: ProjectionController) {
                     AppField(author, { author = it }, "Mpanoratra", Modifier.fillMaxWidth())
                     Spacer(Modifier.height(8.dp))
                     AppField(
-                        lyricText, { lyricText = it }, "Tononkira — asio [REFRAIN] alohan'ny refrain",
+                        lyricText, { lyricText = it }, "Tononkira — ataovy misaraka amin'ny andalana banga ny andininy tsirairay",
                         Modifier.weight(1f).fillMaxWidth(), singleLine = false, minLines = 6
                     )
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "Refrain: soraty [REFRAIN] alohan'ny refrain. Raha ho an'andininy sasany ihany: [REFRAIN 4] na [REFRAIN 1-3]. " +
+                            "Ny refrain eo aorian'ny andininy dia an'io andininy io; raha tsy misy, ilay refrain teo aloha no ampiasaina.",
+                        color = Ui.Muted, fontSize = 11.sp
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 6.dp)) {
+                        GhostButton("＋ Refrain", { lyricText = lyricText.trimEnd() + "\n\n[REFRAIN]\n" })
+                        GhostButton("＋ Refrain ho an'andininy…", { lyricText = lyricText.trimEnd() + "\n\n[REFRAIN 1-3]\n" })
+                    }
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         GoldButton("Tehirizo ny fanitsiana", {
                             Database.save(
@@ -258,11 +312,19 @@ fun HymnScreen(ctrl: ProjectionController) {
                             )
                             Database.save("DELETE FROM song_part_edits WHERE lang=? AND num=?", listOf(lang, song.number))
                             lyricText.split(Regex("\\n\\s*\\n")).filter { it.isNotBlank() }.forEachIndexed { index, block ->
-                                val refrain = block.trimStart().startsWith("[REFRAIN]", true)
-                                val clean = block.trim().replaceFirst(Regex("^\\[REFRAIN\\]\\s*", RegexOption.IGNORE_CASE), "")
+                                val trimmed = block.trim()
+                                val head = RefrainHead.find(trimmed)
+                                val clean = if (head != null) trimmed.removeRange(head.range) else trimmed
+                                val scopeRaw = head?.groupValues?.getOrNull(1)?.trim().orEmpty()
+                                val scopeNorm = scopeRaw.replace(Regex("\\s*[-–]\\s*"), "-").replace(Regex("[\\s,]+"), ",")
+                                val kind = when {
+                                    head == null -> "v"
+                                    scopeNorm.isNotEmpty() && SongPart.parseScope(scopeNorm) != null -> "r:$scopeNorm"
+                                    else -> "r"
+                                }
                                 Database.save(
                                     "INSERT INTO song_part_edits(lang,num,idx,kind,text) VALUES(?,?,?,?,?)",
-                                    listOf(lang, song.number, index + 1, if (refrain) "r" else "v", clean)
+                                    listOf(lang, song.number, index + 1, kind, clean)
                                 )
                             }
                             parts = Database.songParts(lang, song.number)

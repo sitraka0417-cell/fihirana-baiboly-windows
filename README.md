@@ -76,3 +76,11 @@ Les mêmes curseurs de zoom, déplacement horizontal et vertical sont également
 - **Ctrl + ↑/↓** (ou Ctrl + ←/→) : taille du texte pendant la projection ; le texte se réduit aussi automatiquement s'il déborde.
 - Nouveau design sombre/or, rendu identique entre l'aperçu et l'écran de projection.
 - Fond vidéo : affiché sur le 2ᵉ écran uniquement (fenêtre JavaFX sous une fenêtre de texte transparente).
+
+### Refrains par couplet (v1.1.1)
+Dans l'éditeur d'un chant : `[REFRAIN]` avant un refrain ; `[REFRAIN 4]` ou `[REFRAIN 1-3,5]` pour un refrain réservé à certains couplets.
+Priorité : portée explicite → refrain juste après le couplet → dernier refrain placé avant → premier refrain du chant.
+Exemple : `couplet 1`, `[REFRAIN]`, `couplet 2`, `couplet 3`, `[REFRAIN 4]`, `couplet 4` → les couplets 1–3 utilisent le 1er refrain, le 4 utilise le sien.
+Touche **B** : masquer le texte (le fond reste). ★ : chants favoris.
+
+Les refrains viennent déjà de la base (ordre des `stanzas`, ex. `v r v v v r`) : la règle est la même que dans l'application Android — refrain du couplet lui-même, sinon refrain juste après, sinon dernier refrain avant, sinon premier refrain après. La touche **R** suit cette règle ; l'édition manuelle (`[REFRAIN 4]`) n'est qu'une option de correction.

@@ -7,7 +7,24 @@ import java.sql.ResultSet
 
 data class Song(val lang: String, val number: Int, val title: String, val author: String, val key: String, val theme: Int, val sub: Int)
 data class SongPart(val index: Int, val kind: String, val text: String) {
-    val isRefrain: Boolean get() = kind == "r"
+    val isRefrain: Boolean get() = kind.startsWith("r")
+
+    /** Refrain réservé à certains couplets : kind = "r:1-3,5". Sans portée : "r". */
+    val scope: Set<Int>? get() = parseScope(kind.substringAfter(':', ""))
+    val scopeText: String get() = kind.substringAfter(':', "")
+
+    companion object {
+        fun parseScope(text: String): Set<Int>? {
+            val out = mutableSetOf<Int>()
+            text.split(',', ' ').map { it.trim() }.filter { it.isNotEmpty() }.forEach { token ->
+                val range = token.split('-', '–')
+                val a = range.getOrNull(0)?.toIntOrNull()
+                val b = range.getOrNull(1)?.toIntOrNull() ?: a
+                if (a != null && b != null && b >= a && b - a < 200) for (n in a..b) out.add(n)
+            }
+            return out.ifEmpty { null }
+        }
+    }
 }
 data class HymnLanguage(val code: String, val name: String, val short: String)
 data class HymnTheme(val id: Int, val name: String, val parent: String?)
@@ -178,6 +195,16 @@ object Database {
         user.prepareStatement("SELECT 1 FROM favorites WHERE kind=? AND item_key=?").use { p ->
             p.setString(1, kind); p.setString(2, key)
             p.executeQuery().use { it.next() }
+        }
+
+    fun favorites(kind: String): Set<String> =
+        user.prepareStatement("SELECT item_key FROM favorites WHERE kind=?").use { p ->
+            p.setString(1, kind)
+            p.executeQuery().use { r ->
+                val out = HashSet<String>()
+                while (r.next()) out.add(r.getString(1))
+                out
+            }
         }
 
     fun toggleFavorite(kind: String, key: String) {

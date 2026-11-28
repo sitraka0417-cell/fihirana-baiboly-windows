@@ -1,5 +1,7 @@
 package mg.sitraka.fihirana.windows
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -64,7 +66,11 @@ data class ProjectionSlide(
     /** Titre propre à cette diapositive (ex. « Salamo 139:5 »). Sinon le titre du contenu est utilisé. */
     val title: String? = null,
     /** Petit libellé sous le titre (ex. « Andininy 2 », « Refrain »). */
-    val label: String = ""
+    val label: String = "",
+    /** Numéro du couplet (0 pour un refrain). */
+    val verseNo: Int = 0,
+    /** Pour un refrain : couplets auxquels il est explicitement réservé (null = général). */
+    val scope: Set<Int>? = null
 )
 
 enum class ContentKind { HYMN, BIBLE, OTHER }
@@ -160,6 +166,8 @@ class ProjectionController {
     var index by mutableIntStateOf(0)
     var kind by mutableStateOf(ContentKind.HYMN)
     var live by mutableStateOf(false)
+    /** Écran « noir » : on garde le fond mais on cache le texte (touche B). */
+    var blank by mutableStateOf(false)
     var fontSize by mutableIntStateOf(38)
     var background by mutableStateOf(BackgroundSpec())
     private var returnIndex = -1
@@ -183,16 +191,19 @@ class ProjectionController {
         this.subtitle = subtitle
         this.slides = slides
         this.index = if (slides.isEmpty()) 0 else index.coerceIn(0, slides.lastIndex)
+        blank = false
     }
 
     fun go(delta: Int) {
         if (slides.isEmpty()) return
+        blank = false
         returnIndex = -1
         index = (index + delta).coerceIn(0, slides.lastIndex)
     }
 
     fun select(i: Int) {
         if (slides.isEmpty()) return
+        blank = false
         returnIndex = -1
         index = i.coerceIn(0, slides.lastIndex)
     }
@@ -203,6 +214,7 @@ class ProjectionController {
      */
     fun toggleRefrain() {
         val cur = slides.getOrNull(index) ?: return
+        blank = false
         if (cur.refrain) {
             val from = maxOf(index, returnIndex)
             var i = from + 1
@@ -210,11 +222,17 @@ class ProjectionController {
             index = if (i <= slides.lastIndex) i else if (returnIndex >= 0) returnIndex else index
             returnIndex = -1
         } else {
-            val target = slides.indices.firstOrNull { it > index && slides[it].refrain }
-                ?: slides.indexOfFirst { it.refrain }
-            if (target >= 0) {
+            // Même règle que l'application Android :
+            // 1) refrain réservé à ce couplet, 2) refrain juste après, 3) dernier refrain avant, 4) premier refrain après
+            val vn = cur.verseNo
+            fun ok(sl: ProjectionSlide?) = sl != null && sl.refrain && (sl.scope == null || vn in sl.scope)
+            var pick = if (vn > 0) slides.indexOfFirst { it.refrain && it.scope?.contains(vn) == true } else -1
+            if (pick < 0 && ok(slides.getOrNull(index + 1))) pick = index + 1
+            if (pick < 0) for (i in index downTo 0) if (ok(slides[i])) { pick = i; break }
+            if (pick < 0) for (i in index until slides.size) if (ok(slides[i])) { pick = i; break }
+            if (pick >= 0) {
                 returnIndex = index
-                index = target
+                index = pick
             }
         }
     }
@@ -265,8 +283,9 @@ fun handleProjectionKey(ctrl: ProjectionController, e: KeyEvent, focus: FocusMan
         Key.DirectionRight, Key.DirectionDown, Key.PageDown -> { ctrl.go(1); true }
         Key.DirectionLeft, Key.DirectionUp, Key.PageUp -> { ctrl.go(-1); true }
         Key.R -> { ctrl.toggleRefrain(); true }
-        Key.Home -> { ctrl.select(0); true }
-        Key.End -> { ctrl.select(ctrl.slides.lastIndex); true }
+        Key.B, Key.Period -> { ctrl.blank = !ctrl.blank; true }
+        Key.MoveHome, Key.Home -> { ctrl.select(0); true }
+        Key.MoveEnd -> { ctrl.select(ctrl.slides.lastIndex); true }
         else -> false
     }
 }
@@ -382,16 +401,17 @@ fun ProjectionCanvas(
     modifier: Modifier = Modifier,
     drawBackground: Boolean = true
 ) {
-    val slide = ctrl.current
+    val shown = if (ctrl.blank) null else ctrl.current
     BoxWithConstraints(modifier.background(if (drawBackground) Color.Black else Color.Transparent)) {
         val scale = maxHeight.value / 720f
         if (drawBackground) BackgroundLayer(ctrl.background, Modifier.fillMaxSize())
-        Column(
+        Crossfade(targetState = shown, modifier = Modifier.fillMaxSize(), animationSpec = tween(220), label = "slide") { slide ->
+          if (slide != null) Column(
             Modifier.fillMaxSize().padding(horizontal = (64 * scale).dp, vertical = (34 * scale).dp),
             horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            val title = slide?.title ?: ctrl.title
-            val sub = slide?.label?.takeIf { it.isNotBlank() } ?: ctrl.subtitle
+          ) {
+            val title = slide.title ?: ctrl.title
+            val sub = slide.label.takeIf { it.isNotBlank() } ?: ctrl.subtitle
             if (title.isNotBlank()) {
                 Text(
                     title, color = Ui.Gold, fontSize = (30 * scale).sp, fontWeight = FontWeight.Bold,
@@ -408,8 +428,9 @@ fun ProjectionCanvas(
             }
             Spacer(Modifier.height((14 * scale).dp))
             BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                FitText(slide?.text ?: "", ctrl.fontSize * scale, maxHeight)
+                FitText(slide.text, ctrl.fontSize * scale, maxHeight)
             }
+          }
         }
     }
 }
