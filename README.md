@@ -84,3 +84,6 @@ Exemple : `couplet 1`, `[REFRAIN]`, `couplet 2`, `couplet 3`, `[REFRAIN 4]`, `co
 Touche **B** : masquer le texte (le fond reste). ★ : chants favoris.
 
 Les refrains viennent déjà de la base (ordre des `stanzas`, ex. `v r v v v r`) : la règle est la même que dans l'application Android — refrain du couplet lui-même, sinon refrain juste après, sinon dernier refrain avant, sinon premier refrain après. La touche **R** suit cette règle ; l'édition manuelle (`[REFRAIN 4]`) n'est qu'une option de correction.
+
+### Éditeur de chant (v1.1.4)
+Chaque couplet/refrain est une carte : type Andininy/Refrain, monter/descendre, supprimer, et pour un refrain le champ « Ho an'ny andininy » (ex. `4` ou `1-3`) pour le réserver à certains couplets.

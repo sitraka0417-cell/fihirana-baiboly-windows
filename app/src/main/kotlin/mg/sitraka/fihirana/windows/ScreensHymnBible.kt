@@ -2,6 +2,7 @@ package mg.sitraka.fihirana.windows
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -140,14 +141,11 @@ fun buildHymnSlides(parts: List<SongPart>, repeatRefrain: Boolean): List<Project
     return out
 }
 
-private fun lyricsFromParts(parts: List<SongPart>): String = parts.joinToString("\n\n") {
-    if (it.isRefrain) {
-        val sc = if (it.scopeText.isNotBlank()) " ${it.scopeText}" else ""
-        "[REFRAIN$sc]\n${it.text}"
-    } else it.text
-}
+/** Une partie du chant en cours d'édition. scope = couplets concernés si refrain particulier (ex. « 4 » ou « 1-3 »). */
+data class EditPart(val refrain: Boolean, val text: String, val scope: String = "")
 
-private val RefrainHead = Regex("^\\[REFRAIN(?:\\s+([0-9,\\-–\\s]+?))?\\s*\\]\\s*", RegexOption.IGNORE_CASE)
+private fun normalizeScope(raw: String): String =
+    raw.trim().replace(Regex("\\s*[-–]\\s*"), "-").replace(Regex("[\\s,;]+"), ",").trim(',')
 
 @Composable
 fun HymnScreen(ctrl: ProjectionController) {
@@ -168,7 +166,7 @@ fun HymnScreen(ctrl: ProjectionController) {
     var edit by remember { mutableStateOf(false) }
     var title by remember { mutableStateOf("") }
     var author by remember { mutableStateOf("") }
-    var lyricText by remember { mutableStateOf("") }
+    val editParts = remember { mutableStateListOf<EditPart>() }
     var status by remember { mutableStateOf("") }
 
     val song = selected
@@ -202,7 +200,8 @@ fun HymnScreen(ctrl: ProjectionController) {
         parts = Database.songParts(s.lang, s.number)
         title = s.title
         author = s.author
-        lyricText = lyricsFromParts(parts)
+        editParts.clear()
+        editParts.addAll(parts.map { EditPart(it.isRefrain, it.text, it.scopeText) })
         edit = false
         status = ""
         stagedIndex = 0
@@ -290,19 +289,61 @@ fun HymnScreen(ctrl: ProjectionController) {
                     Spacer(Modifier.height(8.dp))
                     AppField(author, { author = it }, "Mpanoratra", Modifier.fillMaxWidth())
                     Spacer(Modifier.height(8.dp))
-                    AppField(
-                        lyricText, { lyricText = it }, "Tononkira — ataovy misaraka amin'ny andalana banga ny andininy tsirairay",
-                        Modifier.weight(1f).fillMaxWidth(), singleLine = false, minLines = 6
-                    )
-                    Spacer(Modifier.height(6.dp))
                     Text(
-                        "Refrain: soraty [REFRAIN] alohan'ny refrain. Raha ho an'andininy sasany ihany: [REFRAIN 4] na [REFRAIN 1-3]. " +
-                            "Ny refrain eo aorian'ny andininy dia an'io andininy io; raha tsy misy, ilay refrain teo aloha no ampiasaina.",
+                        "Andininy sy refrain. Ny refrain eo aorian'ny andininy dia an'io andininy io; raha tsy misy dia ilay refrain teo aloha no ampiasaina. " +
+                            "Raha misy refrain ho an'andininy sasany ihany, fenoy ny \"Ho an'ny andininy\" (oh: 4 na 1-3).",
                         color = Ui.Muted, fontSize = 11.sp
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 6.dp)) {
-                        GhostButton("＋ Refrain", { lyricText = lyricText.trimEnd() + "\n\n[REFRAIN]\n" })
-                        GhostButton("＋ Refrain ho an'andininy…", { lyricText = lyricText.trimEnd() + "\n\n[REFRAIN 1-3]\n" })
+                    Spacer(Modifier.height(6.dp))
+                    LazyColumn(Modifier.weight(1f)) {
+                        itemsIndexed(editParts) { i, ep ->
+                            val verseNumber = editParts.take(i + 1).count { !it.refrain }
+                            Column(
+                                Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                                    .background(Ui.Surface2, RoundedCornerShape(14.dp))
+                                    .border(1.dp, if (ep.refrain) Ui.Gold else Ui.Border, RoundedCornerShape(14.dp))
+                                    .padding(12.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text(
+                                        if (ep.refrain) "REFRAIN" else "ANDININY $verseNumber",
+                                        color = if (ep.refrain) Ui.Gold else Ui.Muted,
+                                        fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.3.sp,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Chip("Andininy", !ep.refrain, { editParts[i] = ep.copy(refrain = false) })
+                                    Chip("Refrain", ep.refrain, { editParts[i] = ep.copy(refrain = true) })
+                                    GhostButton("↑", {
+                                        if (i > 0) { val t = editParts[i]; editParts[i] = editParts[i - 1]; editParts[i - 1] = t }
+                                    }, enabled = i > 0)
+                                    GhostButton("↓", {
+                                        if (i < editParts.lastIndex) { val t = editParts[i]; editParts[i] = editParts[i + 1]; editParts[i + 1] = t }
+                                    }, enabled = i < editParts.lastIndex)
+                                    GhostButton("Fafana", { editParts.removeAt(i) }, danger = true)
+                                }
+                                Spacer(Modifier.height(8.dp))
+                                AppField(
+                                    ep.text, { editParts[i] = ep.copy(text = it) }, "Tononkira",
+                                    Modifier.fillMaxWidth(), singleLine = false, minLines = 3
+                                )
+                                if (ep.refrain) {
+                                    Spacer(Modifier.height(8.dp))
+                                    AppField(
+                                        ep.scope, { editParts[i] = ep.copy(scope = it) },
+                                        "Ho an'ny andininy (oh: 4 na 1-3) — avelao foana raha ho an'ny rehetra",
+                                        Modifier.fillMaxWidth()
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 8.dp)) {
+                        GhostButton("＋ Andininy", { editParts.add(EditPart(false, "")) })
+                        GhostButton("＋ Refrain", { editParts.add(EditPart(true, "")) })
+                        GhostButton("＋ Refrain ho an'andininy manokana", {
+                            val last = editParts.count { !it.refrain }
+                            editParts.add(EditPart(true, "", if (last > 0) last.toString() else ""))
+                        })
                     }
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         GoldButton("Tehirizo ny fanitsiana", {
@@ -311,20 +352,16 @@ fun HymnScreen(ctrl: ProjectionController) {
                                 listOf(lang, song.number, title, author)
                             )
                             Database.save("DELETE FROM song_part_edits WHERE lang=? AND num=?", listOf(lang, song.number))
-                            lyricText.split(Regex("\\n\\s*\\n")).filter { it.isNotBlank() }.forEachIndexed { index, block ->
-                                val trimmed = block.trim()
-                                val head = RefrainHead.find(trimmed)
-                                val clean = if (head != null) trimmed.removeRange(head.range) else trimmed
-                                val scopeRaw = head?.groupValues?.getOrNull(1)?.trim().orEmpty()
-                                val scopeNorm = scopeRaw.replace(Regex("\\s*[-–]\\s*"), "-").replace(Regex("[\\s,]+"), ",")
+                            editParts.filter { it.text.isNotBlank() }.forEachIndexed { index, ep ->
+                                val scopeNorm = normalizeScope(ep.scope)
                                 val kind = when {
-                                    head == null -> "v"
+                                    !ep.refrain -> "v"
                                     scopeNorm.isNotEmpty() && SongPart.parseScope(scopeNorm) != null -> "r:$scopeNorm"
                                     else -> "r"
                                 }
                                 Database.save(
                                     "INSERT INTO song_part_edits(lang,num,idx,kind,text) VALUES(?,?,?,?,?)",
-                                    listOf(lang, song.number, index + 1, kind, clean)
+                                    listOf(lang, song.number, index + 1, kind, ep.text.trim())
                                 )
                             }
                             parts = Database.songParts(lang, song.number)
